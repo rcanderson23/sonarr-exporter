@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -114,7 +115,9 @@ type Configuration struct {
 
 func main() {
 	config := Configuration{}
-	file, err := os.Open("config.json")
+	configFilePtr := flag.String("configFile", "config.json", "path to json config file")
+	flag.Parse()
+	file, err := os.Open(*configFilePtr)
 	if err != nil {
 		fmt.Println("Failed to open config file")
 		os.Exit(3)
