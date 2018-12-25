@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: sonarr-exporter
+  name: sonarr-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sonarr-exporter
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: sonarr-exporter
+      annotations:
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: /metrics
+        prometheus.io/port: '9715'
+    spec:
+      containers:
+      - image: rcanderson23/sonarr_exporter:latest
+        imagePullPolicy: Always
+        name: sonarr-exporter
+        command: ['/sonarr_exporter','-configFile=/config/config.json']
+        resources: {}
+        ports:
+          - containerPort: 9715
+        volumeMounts:
+          - name: sonarr-exporter-secret
+            mountPath: "/config"
+            readOnly: true
+      volumes:
+        - name: sonarr-exporter-secret
+          secret:
+            secretName: sonarr-exporter-secret
+status: {}
