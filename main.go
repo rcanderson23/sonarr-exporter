@@ -133,6 +133,15 @@ func main() {
 	sonarrUrl = config.SonarrURL
 	Sonarr := newSonarrCollector()
 	prometheus.MustRegister(Sonarr)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`<html>
+			<head><title>Sonarr Exporter</title></head>
+			<body>
+			<h1>Sonarr Exporter</h1>
+			<p><a href="` + "metrics" + `">Metrics</a></p>
+			</body>
+			</html>`))
+	})
 	http.Handle("/metrics", promhttp.Handler())
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":9715", nil))
 }
