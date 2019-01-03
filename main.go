@@ -60,8 +60,12 @@ func (c *SonarrCollector) Describe(ch chan<- *prometheus.Desc) {
 func (c *SonarrCollector) Collect(ch chan<- prometheus.Metric) {
 
 	status := SystemStatus{}
+	sonarrStatus := 1.0
 	getJson(sonarrUrl+"/system/status", apiKey, &status)
-	ch <- prometheus.MustNewConstMetric(c.systemStatus, prometheus.CounterValue, 1.0, status.Version, status.AppData, status.Branch)
+	if (SystemStatus{}) == status {
+		sonarrStatus = 0.0
+	}
+	ch <- prometheus.MustNewConstMetric(c.systemStatus, prometheus.CounterValue, sonarrStatus, status.Version, status.AppData, status.Branch)
 
 	history := History{}
 	getJson(sonarrUrl+"/history", apiKey, &history)
@@ -143,5 +147,6 @@ func main() {
 			</html>`))
 	})
 	http.Handle("/metrics", promhttp.Handler())
+	fmt.Println("Exporter listening on :9715/metrics")
 	log.Fatal(http.ListenAndServe(":9715", nil))
 }
