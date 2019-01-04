@@ -77,9 +77,7 @@ func (c *SonarrCollector) Collect(ch chan<- prometheus.Metric) {
 
 	queue := Queue{}
 	getJson(sonarrUrl+"/queue", apiKey, &queue)
-	for _, titles := range queue {
-		ch <- prometheus.MustNewConstMetric(c.queueRecords, prometheus.CounterValue, float64(titles.Size), titles.Title)
-	}
+	ch <- prometheus.MustNewConstMetric(c.queueRecords, prometheus.CounterValue, float64(len(queue)))
 
 	folders := RootFolder{}
 	getJson(sonarrUrl+"/rootfolder", apiKey, &folders)
