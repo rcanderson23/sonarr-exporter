@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -25,6 +26,11 @@ func getJson(url string, apiKey string, target interface{}) error {
 	req.Header.Set("X-Api-Key", apiKey)
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Printf("getJson(%q) returned error: %v", url, err)
+		return err
+	}
+	if resp.StatusCode != 200 {
+		log.Printf("getJson(%q) returned non-200 status: %s", url, resp.Status)
 		return err
 	}
 	defer resp.Body.Close()
@@ -37,6 +43,7 @@ type SonarrCollector struct {
 	wantedRecords    *prometheus.Desc
 	queueRecords     *prometheus.Desc
 	folderProperties *prometheus.Desc
+	healthIssues     *prometheus.Desc
 }
 
 func newSonarrCollector() *SonarrCollector {
@@ -46,6 +53,7 @@ func newSonarrCollector() *SonarrCollector {
 		wantedRecords:    prometheus.NewDesc("sonarr_missing_episodes", "Total missing episodes in Sonarr", nil, nil),
 		queueRecords:     prometheus.NewDesc("sonarr_queue_total_records", "Total records in Sonarr queue", nil, nil),
 		folderProperties: prometheus.NewDesc("sonarr_root_folder_space", "Root folder space in Sonarr", []string{"path"}, nil),
+		healthIssues:     prometheus.NewDesc("sonarr_health_issues", "Amount of health issues in Sonarr", []string{"type"}, nil),
 	}
 }
 
@@ -61,7 +69,9 @@ func (c *SonarrCollector) Collect(ch chan<- prometheus.Metric) {
 
 	status := SystemStatus{}
 	sonarrStatus := 1.0
-	getJson(sonarrUrl+"/system/status", apiKey, &status)
+	if err := getJson(sonarrUrl+"/system/status", apiKey, &status); err != nil {
+		log.Printf("getJson(%q) failed: %v", sonarrUrl+"/system/status", err)
+	}
 	if (SystemStatus{}) == status {
 		sonarrStatus = 0.0
 	}
@@ -83,6 +93,16 @@ func (c *SonarrCollector) Collect(ch chan<- prometheus.Metric) {
 	getJson(sonarrUrl+"/rootfolder", apiKey, &folders)
 	for _, folder := range folders {
 		ch <- prometheus.MustNewConstMetric(c.folderProperties, prometheus.CounterValue, float64(folder.FreeSpace), folder.Path)
+	}
+
+	health := Health{}
+	healthIssuesByType := map[string]int{}
+	getJson(sonarrUrl+"/health", apiKey, &health)
+	for _, h := range health {
+		healthIssuesByType[h.Type]++
+	}
+	for t, count := range healthIssuesByType {
+		ch <- prometheus.MustNewConstMetric(c.healthIssues, prometheus.CounterValue, float64(count), t)
 	}
 }
 
@@ -110,16 +130,26 @@ type WantedMissing struct {
 	TotalRecords int `json:"totalRecords"`
 }
 
+type Health []struct {
+	Type    string `json:type`
+	Message string `json:message`
+	WikiURL string `json:wikiUrl`
+}
+
 type Configuration struct {
 	APIKey    string `json:"apiKey"`
 	SonarrURL string `json:"sonarrUrl"`
 }
 
+var (
+	flagConfigFile = flag.String("configFile", "config.json", "path to json config file")
+	flagPort       = flag.Int("port", 9715, "port to use")
+)
+
 func main() {
 	config := Configuration{}
-	configFilePtr := flag.String("configFile", "config.json", "path to json config file")
 	flag.Parse()
-	file, err := os.Open(*configFilePtr)
+	file, err := os.Open(*flagConfigFile)
 	if err != nil {
 		fmt.Println("Failed to open config file")
 		os.Exit(3)
@@ -145,6 +175,7 @@ func main() {
 			</html>`))
 	})
 	http.Handle("/metrics", promhttp.Handler())
-	fmt.Println("Exporter listening on :9715/metrics")
-	log.Fatal(http.ListenAndServe(":9715", nil))
+	listenAddress := fmt.Sprintf(":%d", *flagPort)
+	fmt.Println("Exporter listening on " + listenAddress + "/metrics")
+	log.Fatal(http.ListenAndServe(listenAddress, nil))
 }
