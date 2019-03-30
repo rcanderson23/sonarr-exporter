@@ -29,6 +29,10 @@ func getJson(url string, apiKey string, target interface{}) error {
 		log.Printf("getJson(%q) returned error: %v", url, err)
 		return err
 	}
+	if resp.StatusCode != 200 {
+		log.Printf("getJson(%q) returned non-200 status: %s", url, resp.Status)
+		return err
+	}
 	defer resp.Body.Close()
 	return json.NewDecoder(resp.Body).Decode(target)
 }
